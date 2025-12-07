@@ -81,7 +81,15 @@ class StaticOAuthProvider(OAuthProvider):
 
     def __init__(self, expected_token: str) -> None:
         # issuer URL can be anything HTTPS; only used for metadata endpoints
-        super().__init__(issuer_url="https://mcp-coroot.local")
+        # fastmcp 2.x only expects issuer_url; 3.x requires base_url as well.
+        try:
+            super().__init__(
+                base_url="https://mcp-coroot.local",
+                issuer_url="https://mcp-coroot.local",
+            )
+        except TypeError:
+            # Fallback for older fastmcp versions that don't take base_url
+            super().__init__(issuer_url="https://mcp-coroot.local")
         self.expected_token = expected_token
 
     async def load_access_token(self, token: str) -> AccessToken | None:
