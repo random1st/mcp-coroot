@@ -5,6 +5,38 @@ from unittest.mock import patch
 import pytest
 
 from mcp_coroot import server
+from mcp_coroot.server import StaticTokenVerifier
+
+
+class TestStaticTokenVerifier:
+    """Test the StaticTokenVerifier class."""
+
+    @pytest.mark.asyncio
+    async def test_verify_valid_token(self):
+        """Test that a valid token returns an AccessToken."""
+        verifier = StaticTokenVerifier("secret123")
+        result = await verifier.verify_token("secret123")
+
+        assert result is not None
+        assert result.token == "secret123"
+        assert result.client_id == "mcp-client"
+        assert result.scopes == []
+
+    @pytest.mark.asyncio
+    async def test_verify_invalid_token(self):
+        """Test that an invalid token returns None."""
+        verifier = StaticTokenVerifier("secret123")
+        result = await verifier.verify_token("wrong-token")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_verify_empty_token(self):
+        """Test that an empty token returns None."""
+        verifier = StaticTokenVerifier("secret123")
+        result = await verifier.verify_token("")
+
+        assert result is None
 
 
 class TestMainFunction:
@@ -16,10 +48,80 @@ class TestMainFunction:
         assert callable(server.main)
 
     @patch("mcp_coroot.server.mcp.run")
-    def test_main_calls_mcp_run(self, mock_run):
-        """Test that main() calls mcp.run()."""
+    @patch("sys.argv", ["mcp-coroot"])
+    def test_main_calls_mcp_run_stdio_default(self, mock_run):
+        """Test that main() calls mcp.run() with stdio by default."""
         server.main()
-        mock_run.assert_called_once()
+        mock_run.assert_called_once_with()
+
+    @patch("mcp_coroot.server.mcp.run")
+    @patch("sys.argv", ["mcp-coroot", "--transport", "sse"])
+    def test_main_calls_mcp_run_with_sse(self, mock_run):
+        """Test that main() calls mcp.run() with SSE transport."""
+        server.main()
+        mock_run.assert_called_once_with(
+            transport="sse",
+            host="127.0.0.1",
+            port=8000,
+            auth=None,
+        )
+
+    @patch("mcp_coroot.server.mcp.run")
+    @patch(
+        "sys.argv", ["mcp-coroot", "--transport", "streamable-http", "--port", "9000"]
+    )
+    def test_main_calls_mcp_run_with_streamable_http(self, mock_run):
+        """Test that main() calls mcp.run() with streamable-http transport."""
+        server.main()
+        mock_run.assert_called_once_with(
+            transport="streamable-http",
+            host="127.0.0.1",
+            port=9000,
+            auth=None,
+        )
+
+    @patch("mcp_coroot.server.mcp.run")
+    @patch("sys.argv", ["mcp-coroot", "--transport", "sse", "--host", "0.0.0.0"])
+    def test_main_custom_host(self, mock_run):
+        """Test that main() accepts custom host."""
+        server.main()
+        mock_run.assert_called_once_with(
+            transport="sse",
+            host="0.0.0.0",
+            port=8000,
+            auth=None,
+        )
+
+    @patch("mcp_coroot.server.mcp.run")
+    @patch("sys.argv", ["mcp-coroot", "--transport", "sse", "--auth-token", "mysecret"])
+    def test_main_with_auth_token_cli(self, mock_run):
+        """Test that main() creates auth verifier from CLI argument."""
+        server.main()
+
+        # Check that run was called with an auth parameter
+        call_args = mock_run.call_args
+        assert call_args.kwargs["auth"] is not None
+        assert isinstance(call_args.kwargs["auth"], StaticTokenVerifier)
+
+    @patch("mcp_coroot.server.mcp.run")
+    @patch.dict("os.environ", {"MCP_AUTH_TOKEN": "envsecret"})
+    @patch("sys.argv", ["mcp-coroot", "--transport", "sse"])
+    def test_main_with_auth_token_env(self, mock_run):
+        """Test that main() creates auth verifier from environment variable."""
+        server.main()
+
+        # Check that run was called with an auth parameter
+        call_args = mock_run.call_args
+        assert call_args.kwargs["auth"] is not None
+        assert isinstance(call_args.kwargs["auth"], StaticTokenVerifier)
+
+    @patch("mcp_coroot.server.mcp.run")
+    @patch("sys.argv", ["mcp-coroot", "--auth-token", "mysecret"])
+    def test_main_stdio_ignores_auth_token(self, mock_run):
+        """Test that auth token is ignored for stdio transport."""
+        server.main()
+        # For stdio, mcp.run() is called without arguments
+        mock_run.assert_called_once_with()
 
     def test_server_initialization(self):
         """Test that the MCP server is initialized correctly."""

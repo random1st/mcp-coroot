@@ -138,6 +138,68 @@ The server supports three authentication methods:
 2. **Session Cookie** - Required for SSO/MFA environments
 3. **API Key** - Limited to data ingestion endpoints only
 
+## Transport Options
+
+The server supports three transport modes via CLI arguments:
+
+### stdio (Default)
+Standard input/output for MCP client integration (Claude Desktop, etc.):
+```bash
+mcp-coroot
+```
+
+### SSE (Server-Sent Events)
+HTTP-based transport using Server-Sent Events:
+```bash
+mcp-coroot --transport sse --host 0.0.0.0 --port 8080
+```
+
+### Streamable HTTP
+Modern HTTP transport for streaming responses:
+```bash
+mcp-coroot --transport streamable-http --host 0.0.0.0 --port 8080
+```
+
+### CLI Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--transport` | `stdio` | Transport type: `stdio`, `sse`, `streamable-http` |
+| `--host` | `127.0.0.1` | Host to bind for HTTP/SSE transports |
+| `--port` | `8000` | Port to bind for HTTP/SSE transports |
+| `--auth-token` | - | Bearer token for authentication |
+
+### Bearer Token Authentication
+
+For SSE and Streamable HTTP transports, you can enable Bearer token authentication:
+
+```bash
+# Via CLI argument
+mcp-coroot --transport sse --auth-token your-secret-token
+
+# Via environment variable
+MCP_AUTH_TOKEN=your-secret-token mcp-coroot --transport sse
+```
+
+Clients must include the `Authorization: Bearer <token>` header in requests.
+
+### HTTP Client Configuration Example
+
+For MCP clients that support HTTP/SSE transports:
+
+```json
+{
+  "mcpServers": {
+    "coroot": {
+      "url": "http://localhost:8000/sse",
+      "headers": {
+        "Authorization": "Bearer your-secret-token"
+      }
+    }
+  }
+}
+```
+
 ## Available Commands
 
 Once configured, you can ask Claude to:

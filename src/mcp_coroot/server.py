@@ -24,15 +24,52 @@ Example:
     ```
 """
 
+import argparse
 import json
+import os
 from collections.abc import Callable
 from functools import wraps
 from typing import Any, TypeVar
 from urllib.parse import quote
 
 from fastmcp import FastMCP
+from mcp.server.auth.provider import AccessToken, TokenVerifier
 
 from .client import CorootClient, CorootError
+
+
+class StaticTokenVerifier(TokenVerifier):
+    """Simple token verifier that compares against a static token.
+
+    This verifier is used for Bearer token authentication when running
+    the MCP server with SSE or Streamable HTTP transport.
+    """
+
+    def __init__(self, expected_token: str) -> None:
+        """Initialize the verifier with the expected token.
+
+        Args:
+            expected_token: The token that clients must provide.
+        """
+        self.expected_token = expected_token
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        """Verify the provided token against the expected token.
+
+        Args:
+            token: The token provided by the client.
+
+        Returns:
+            AccessToken if valid, None otherwise.
+        """
+        if token == self.expected_token:
+            return AccessToken(
+                token=token,
+                client_id="mcp-client",
+                scopes=[],
+            )
+        return None
+
 
 # Initialize FastMCP server
 mcp = FastMCP("mcp-coroot")  # type: ignore[var-annotated]
@@ -2191,8 +2228,73 @@ async def create_or_update_role(
 
 
 def main() -> None:
-    """Run the MCP server."""
-    mcp.run()
+    """Run the MCP server.
+
+    Supports multiple transport modes:
+    - stdio (default): Standard input/output for MCP client integration
+    - sse: Server-Sent Events over HTTP
+    - streamable-http: Streamable HTTP transport
+
+    For SSE and HTTP transports, optional Bearer token authentication
+    can be enabled via --auth-token or MCP_AUTH_TOKEN environment variable.
+    """
+    parser = argparse.ArgumentParser(
+        description="MCP Coroot Server - Observability platform integration",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run with stdio (default, for MCP clients like Claude Desktop)
+  mcp-coroot
+
+  # Run with SSE transport
+  mcp-coroot --transport sse --port 8080
+
+  # Run with Streamable HTTP and Bearer auth
+  mcp-coroot --transport streamable-http --auth-token secret123
+
+  # Using environment variable for auth token
+  MCP_AUTH_TOKEN=secret123 mcp-coroot --transport sse
+        """,
+    )
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "streamable-http"],
+        default="stdio",
+        help="Transport type (default: stdio)",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind for HTTP/SSE transports (default: 127.0.0.1)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind for HTTP/SSE transports (default: 8000)",
+    )
+    parser.add_argument(
+        "--auth-token",
+        help="Bearer token for authentication (or use MCP_AUTH_TOKEN env var)",
+    )
+
+    args = parser.parse_args()
+
+    # Setup auth if token provided (only for HTTP-based transports)
+    auth = None
+    token = args.auth_token or os.environ.get("MCP_AUTH_TOKEN")
+    if token and args.transport != "stdio":
+        auth = StaticTokenVerifier(token)
+
+    if args.transport == "stdio":
+        mcp.run()
+    else:
+        mcp.run(
+            transport=args.transport,
+            host=args.host,
+            port=args.port,
+            auth=auth,
+        )
 
 
 if __name__ == "__main__":
