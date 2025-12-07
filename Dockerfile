@@ -17,21 +17,7 @@ RUN uv venv && \
     . .venv/bin/activate && \
     uv pip install -e .
 
-# Define all environment variables with defaults
-# Non-sensitive defaults
-ENV COROOT_BASE_URL=http://localhost:8080
 
-# Sensitive variables - should be overridden at runtime
-ENV COROOT_USERNAME=""
-ENV COROOT_PASSWORD=""
-ENV COROOT_SESSION_COOKIE=""
-ENV COROOT_API_KEY=""
-ENV MCP_AUTH_TOKEN=""
-
-# Transport configuration
-ENV MCP_TRANSPORT=streamable-http
-ENV MCP_HOST=0.0.0.0
-ENV MCP_PORT=8000
 
 # Expose the default port for HTTP transport
 EXPOSE 8000
