@@ -26,6 +26,15 @@ ENV COROOT_USERNAME=""
 ENV COROOT_PASSWORD=""
 ENV COROOT_SESSION_COOKIE=""
 ENV COROOT_API_KEY=""
+ENV MCP_AUTH_TOKEN=""
 
-# Run the MCP server using the entry point
-CMD [".venv/bin/mcp-coroot"]
+# Transport configuration
+ENV MCP_TRANSPORT=streamable-http
+ENV MCP_HOST=0.0.0.0
+ENV MCP_PORT=8000
+
+# Expose the default port for HTTP transport
+EXPOSE 8000
+
+# Run the MCP server with streamable-http transport by default
+CMD [".venv/bin/mcp-coroot", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000"]
