@@ -2281,10 +2281,9 @@ Examples:
     args = parser.parse_args()
 
     # Setup auth if token provided (only for HTTP-based transports)
-    auth = None
     token = args.auth_token or os.environ.get("MCP_AUTH_TOKEN")
-    if token and args.transport != "stdio":
-        auth = StaticTokenVerifier(token)
+    if args.transport != "stdio":
+        mcp.auth = StaticTokenVerifier(token) if token else None
 
     if args.transport == "stdio":
         mcp.run()
@@ -2293,7 +2292,6 @@ Examples:
             transport=args.transport,
             host=args.host,
             port=args.port,
-            auth=auth,
         )
 
 

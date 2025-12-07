@@ -42,6 +42,13 @@ class TestStaticTokenVerifier:
 class TestMainFunction:
     """Test the main function and entry point."""
 
+    @pytest.fixture(autouse=True)
+    def reset_mcp_auth(self):
+        """Ensure mcp.auth is reset between tests to avoid leakage."""
+        server.mcp.auth = None
+        yield
+        server.mcp.auth = None
+
     def test_main_function_exists(self):
         """Test that main function exists."""
         assert hasattr(server, "main")
@@ -63,8 +70,8 @@ class TestMainFunction:
             transport="sse",
             host="127.0.0.1",
             port=8000,
-            auth=None,
         )
+        assert server.mcp.auth is None
 
     @patch("mcp_coroot.server.mcp.run")
     @patch(
@@ -77,8 +84,8 @@ class TestMainFunction:
             transport="streamable-http",
             host="127.0.0.1",
             port=9000,
-            auth=None,
         )
+        assert server.mcp.auth is None
 
     @patch("mcp_coroot.server.mcp.run")
     @patch("sys.argv", ["mcp-coroot", "--transport", "sse", "--host", "0.0.0.0"])
@@ -89,8 +96,8 @@ class TestMainFunction:
             transport="sse",
             host="0.0.0.0",
             port=8000,
-            auth=None,
         )
+        assert server.mcp.auth is None
 
     @patch("mcp_coroot.server.mcp.run")
     @patch("sys.argv", ["mcp-coroot", "--transport", "sse", "--auth-token", "mysecret"])
@@ -98,10 +105,10 @@ class TestMainFunction:
         """Test that main() creates auth verifier from CLI argument."""
         server.main()
 
-        # Check that run was called with an auth parameter
+        # Auth token should be attached to the mcp instance, not passed to run()
+        assert isinstance(server.mcp.auth, StaticTokenVerifier)
         call_args = mock_run.call_args
-        assert call_args.kwargs["auth"] is not None
-        assert isinstance(call_args.kwargs["auth"], StaticTokenVerifier)
+        assert "auth" not in call_args.kwargs
 
     @patch("mcp_coroot.server.mcp.run")
     @patch.dict("os.environ", {"MCP_AUTH_TOKEN": "envsecret"})
@@ -110,10 +117,10 @@ class TestMainFunction:
         """Test that main() creates auth verifier from environment variable."""
         server.main()
 
-        # Check that run was called with an auth parameter
+        # Auth token should be attached to the mcp instance, not passed to run()
+        assert isinstance(server.mcp.auth, StaticTokenVerifier)
         call_args = mock_run.call_args
-        assert call_args.kwargs["auth"] is not None
-        assert isinstance(call_args.kwargs["auth"], StaticTokenVerifier)
+        assert "auth" not in call_args.kwargs
 
     @patch("mcp_coroot.server.mcp.run")
     @patch("sys.argv", ["mcp-coroot", "--auth-token", "mysecret"])
@@ -122,6 +129,8 @@ class TestMainFunction:
         server.main()
         # For stdio, mcp.run() is called without arguments
         mock_run.assert_called_once_with()
+        # Stdio should not set auth even if token provided
+        assert server.mcp.auth is None
 
     def test_server_initialization(self):
         """Test that the MCP server is initialized correctly."""
