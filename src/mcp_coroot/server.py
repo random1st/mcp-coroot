@@ -33,6 +33,7 @@ from typing import Any, TypeVar
 from urllib.parse import quote
 
 from fastmcp import FastMCP
+from fastmcp.server.auth.auth import OAuthProvider
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 
 from .client import CorootClient, CorootError
@@ -69,6 +70,57 @@ class StaticTokenVerifier(TokenVerifier):
                 scopes=[],
             )
         return None
+
+
+class StaticOAuthProvider(OAuthProvider):
+    """Minimal OAuthProvider that validates a single static bearer token.
+
+    FastMCP's HTTP transports expect an OAuthProvider with middleware support;
+    this wrapper lets us keep simple static bearer auth without JWTs.
+    """
+
+    def __init__(self, expected_token: str) -> None:
+        # issuer URL can be anything HTTPS; only used for metadata endpoints
+        super().__init__(issuer_url="https://mcp-coroot.local")
+        self.expected_token = expected_token
+
+    async def load_access_token(self, token: str) -> AccessToken | None:
+        if token == self.expected_token:
+            return AccessToken(
+                token=token,
+                client_id="mcp-client",
+                scopes=[],
+                expires_at=None,
+            )
+        return None
+
+    async def verify_token(self, token: str) -> AccessToken | None:  # type: ignore[override]
+        return await self.load_access_token(token)
+
+    # OAuth flow endpoints are not supported for static token auth
+    async def get_client(self, client_id: str):  # pragma: no cover
+        raise NotImplementedError("Client management not supported")
+
+    async def register_client(self, client_info):  # pragma: no cover
+        raise NotImplementedError("Client registration not supported")
+
+    async def authorize(self, client, params):  # pragma: no cover
+        raise NotImplementedError("Authorization flow not supported")
+
+    async def load_authorization_code(self, client, authorization_code):  # pragma: no cover
+        raise NotImplementedError("Authorization code flow not supported")
+
+    async def exchange_authorization_code(self, client, authorization_code):  # pragma: no cover
+        raise NotImplementedError("Authorization code exchange not supported")
+
+    async def load_refresh_token(self, client, refresh_token):  # pragma: no cover
+        raise NotImplementedError("Refresh token flow not supported")
+
+    async def exchange_refresh_token(self, client, refresh_token, scopes):  # pragma: no cover
+        raise NotImplementedError("Refresh token exchange not supported")
+
+    async def revoke_token(self, token):  # pragma: no cover
+        raise NotImplementedError("Token revocation not supported")
 
 
 # Initialize FastMCP server
@@ -2282,8 +2334,11 @@ Examples:
 
     # Setup auth if token provided (only for HTTP-based transports)
     token = args.auth_token or os.environ.get("MCP_AUTH_TOKEN")
-    if args.transport != "stdio":
-        mcp.auth = StaticTokenVerifier(token) if token else None
+    if args.transport != "stdio" and token:
+        # For HTTP/SSE transports, FastMCP expects an OAuthProvider
+        mcp.auth = StaticOAuthProvider(token)
+    else:
+        mcp.auth = None
 
     if args.transport == "stdio":
         mcp.run()

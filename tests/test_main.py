@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from mcp_coroot import server
-from mcp_coroot.server import StaticTokenVerifier
+from mcp_coroot.server import StaticOAuthProvider, StaticTokenVerifier
 
 
 class TestStaticTokenVerifier:
@@ -106,7 +106,7 @@ class TestMainFunction:
         server.main()
 
         # Auth token should be attached to the mcp instance, not passed to run()
-        assert isinstance(server.mcp.auth, StaticTokenVerifier)
+        assert isinstance(server.mcp.auth, StaticOAuthProvider)
         call_args = mock_run.call_args
         assert "auth" not in call_args.kwargs
 
@@ -118,7 +118,7 @@ class TestMainFunction:
         server.main()
 
         # Auth token should be attached to the mcp instance, not passed to run()
-        assert isinstance(server.mcp.auth, StaticTokenVerifier)
+        assert isinstance(server.mcp.auth, StaticOAuthProvider)
         call_args = mock_run.call_args
         assert "auth" not in call_args.kwargs
 
